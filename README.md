@@ -14,7 +14,7 @@
 ## 安装
 
 ```sh
-dsh plugin --profile desktop add dsh-page-monitor
+dsh plugin --profile desktop add @bushizhanghan/dsh-page-monitor
 ```
 
 或本地开发（link 到目录）。

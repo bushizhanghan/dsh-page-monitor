@@ -1,5 +1,5 @@
-﻿{
-  "name": "dsh-page-monitor",
+{
+  "name": "@bushizhanghan/dsh-page-monitor",
   "version": "0.1.0",
   "description": "Webpage watch agent for DeepSeek Harness: track a watchlist of URLs, take snapshots, detect important changes, and notify. 网页监控：盯一批网页，变化自动发现并通知。",
   "type": "module",

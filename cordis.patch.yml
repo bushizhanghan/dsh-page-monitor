@@ -1,4 +1,4 @@
 # dsh bundle layer: mount the page-monitor plugin (lib/index.js).
 - insert:
     - id: page-monitor
-      name: 'dsh-page-monitor'
+      name: '@bushizhanghan/dsh-page-monitor'
