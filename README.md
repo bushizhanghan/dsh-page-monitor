@@ -7,7 +7,7 @@
 
 - **盯一批 URL**：把想盯的网页（学校公告页、报名页、放票页、文档页、竞品页…）加进监控清单
 - **定期巡检**：按 `intervalMinutes` 定时抓取（默认 60 分钟），每次都存快照、和上次对比
-- **判断变化重不重要**：变化率 ≥ 阈值（默认 30%）或命中关键词（默认：通知/公告/报名/考试/成绩/放假/补录/放票）才算重要
+- **判断变化重不重要**：变化率 ≥ 阈值（默认 30%）、命中**新出现**的关键词（默认：通知/公告/报名/考试/成绩/放假/补录/放票），或新增 ≥ 2 行，三者任一即算重要
 - **通知**：重要变化写入本地日志（`alerts.jsonl`），可选企业微信 webhook 推送
 - **会话内问答**：agent 直接答「北邮官网这周有什么新通知」「xx 页现在还放票吗」
 
@@ -34,7 +34,8 @@ dsh plugin --profile desktop add @bushizhanghan/dsh-page-monitor
 | 字段 | 默认 | 说明 |
 |---|---|---|
 | `intervalMinutes` | `60` | 定时巡检间隔；`0` = 关闭定时，只手动查 |
-| `threshold` | `0.3` | 变化率阈值（字符 bigram Dice，和 difflib.quick_ratio 同型） |
+| `threshold` | `0.3` | 变化率阈值（字符 bigram Dice；**不是** difflib.quick_ratio——那个按单字符多重集算，`changeRatio('abc','cba')` 是 1） |
+| `minAddedLines` | `2` | 新增行数达到这个值也算重要（整页比值看不见「多了一条公告」，5000 字页面加一条只有 5%；设 1 = 任何新行都提醒） |
 | `keywords` | 见上 | 全局重要关键词；单条 URL 可覆盖 |
 | `webhookUrl` | `''` | 企业微信机器人 webhook，重要变化推微信 |
 | `provider` | `'dsh'` | 正文提取通道，见下 |
@@ -67,9 +68,9 @@ dsh plugin --profile desktop add @bushizhanghan/dsh-page-monitor
 ## 开发
 
 ```sh
-node --test test/          # engine 单测
+node --test                # 单测 + 集成（11 个）
 node test/integration.test.mjs   # 全链路（fake ctx）集成测试
-node test/live-smoke.mjs   # 真实网页冒烟（北邮官网会 412，见 provider 说明）
+node scripts/live-smoke.mjs  # 真实网页冒烟（不在 test/ 里，不会被 node --test 当成测试；北邮官网会 412，见 provider 说明）
 ```
 
 ## License

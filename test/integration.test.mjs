@@ -2,7 +2,7 @@
 // web seam), then drive the registered tools end-to-end:
 //   add → check (first) → change page → check (detect) → history
 // Run: node test/integration.test.mjs
-import { mkdtempSync, readFileSync, rmSync, readdirSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply } from '../lib/index.js'
@@ -18,6 +18,7 @@ const fakeCtx = {
     async fetch({ url }) {
       const html = this.pages.get(url)
       if (html === undefined) return { url, statusCode: 404, truncated: false, body: { kind: 'html', content: '<html><body>missing</body></html>' } }
+      if (this.truncated?.has(url)) return { url, statusCode: 200, truncated: true, body: { kind: 'html', content: html } }
       return { url, statusCode: 200, truncated: false, body: { kind: 'html', content: html } }
     },
   },
@@ -34,7 +35,11 @@ const results = []
 try {
   // 1. add starts empty watchlist, first check warms the snapshot
   const added = await call('page_watch_add', { url: 'https://example.edu/notice' })
-  results.push(['add', added.ok === true && added.watchers.includes('https://example.edu/notice')])
+  // watchers is an array of OBJECTS: the declared output schema says
+  // items:{type:'object'}, and the host validates every tool value, so a plain
+  // URL string here made the tool fail after its side effects had run.
+  results.push(['add', added.ok === true && added.watchers.some((w) => w.url === 'https://example.edu/notice')])
+  results.push(['add reports the baseline', /baseline captured/.test(added.message || '')])
   const listed1 = await call('page_watch_list', {})
   results.push(['list-after-add', listed1.ok === true && listed1.watchers.length === 1])
 
@@ -62,6 +67,38 @@ try {
   await call('page_watch_add', { url: 'https://example.edu/missing' })
   const check3 = await call('page_watch_check', {})
   results.push(['missing-url', check3.results[0].ok === false && typeof check3.results[0].error === 'string'])
+
+  // 7. a truncated body is an error, not a silent half-snapshot: past the cap a
+  //    real change is invisible, and a cut inside <script> leaks JSON as text.
+  fakeCtx.web.truncated = new Set(['https://example.edu/big'])
+  fakeCtx.web.pages.set('https://example.edu/big', '<html><body><main><p>hi</p></main></body></html>')
+  const bigAdd = await call('page_watch_add', { url: 'https://example.edu/big' })
+  const bigCheck = await call('page_watch_check', { url: 'https://example.edu/big' })
+  results.push(['truncated-body-is-an-error', bigCheck.results[0].ok === false && /100000-char fetch cap/.test(bigCheck.results[0].error)])
+  results.push(['truncated-baseline-is-reported', /baseline fetch failed/.test(bigAdd.message || '')])
+
+  // 8. two hosts that slugOf collapses to the same name must not share a file
+  const cjk = ['https://例子.中国/公告', 'https://另一个例子.中国/通知']
+  for (const url of cjk) {
+    fakeCtx.web.pages.set(url, `<html><body><main><p>${url}</p></main></body></html>`)
+    await call('page_watch_add', { url })
+  }
+  const snaps = readdirSync(join(dir, 'snapshots'))
+  const cjkFiles = snaps.filter((f) => /^https_[0-9a-f]{10}\.json$/.test(f))
+  results.push(['cjk hosts get separate snapshots', cjkFiles.length === 2])
+
+  // 9. a corrupt watchlist must stop a mutating call instead of wiping the list
+  const listFile = join(dir, 'watchlist.json')
+  const good = readFileSync(listFile, 'utf8')
+  writeFileSync(listFile, good.slice(0, 20), 'utf8')
+  let corruptError = ''
+  try {
+    await call('page_watch_add', { url: 'https://example.edu/x' })
+  } catch (error) {
+    corruptError = String(error?.message || error)
+  }
+  results.push(['corrupt watchlist refuses to be overwritten', /not valid JSON/.test(corruptError)])
+  writeFileSync(listFile, good, 'utf8')
 } catch (error) {
   console.error('UNEXPECTED THROW:', error)
   results.push(['no-throw', false])

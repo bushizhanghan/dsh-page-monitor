@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { addedLines, changeRatio, htmlToText, judgeImportance, makeSnapshot, slugOf, snapshotFingerprint } from '../lib/engine.js'
+import { addedLines, changeRatio, htmlToText, judgeImportance, makeSnapshot, slugOf, snapshotFingerprint, urlFingerprint } from '../lib/engine.js'
 
 test('slugOf turns URLs into safe file names', () => {
   assert.equal(slugOf('https://www.bupt.edu.cn'), 'https_www_bupt_edu_cn')
@@ -45,6 +45,46 @@ test('judgeImportance: threshold OR keyword', () => {
   const big = judgeImportance({ oldText: 'a'.repeat(200), newText: 'b'.repeat(200), threshold: 0.3 })
   assert.equal(big.important, true)
   assert.equal(big.hits.length, 0)
+})
+
+test('judgeImportance ignores a keyword that was already there', () => {
+  // 通知/公告/成绩 are in the heading of nearly every notice page, so matching
+  // the whole new page fired on every unrelated tweak.
+  const oldT = '公告\n今日无新通知。'
+  const newT = '公告\n今日无新通知。\n天气转凉。'
+  const v = judgeImportance({ oldText: oldT, newText: newT, keywords: ['公告', '通知'], minAddedLines: 99 })
+  assert.equal(v.important, false)
+  assert.deepEqual(v.hits, [])
+  const fresh = judgeImportance({ oldText: oldT, newText: `${newT}\n补录开始。`, keywords: ['补录'], minAddedLines: 99 })
+  assert.equal(fresh.important, true)
+  assert.deepEqual(fresh.hits, ['补录'])
+})
+
+test('judgeImportance counts new lines, because the ratio cannot see one announcement', () => {
+  // 5 000 chars of stable page + one 20-char announcement = ratio 0.052, so a
+  // 30 % threshold only ever fired on a total rewrite.
+  const oldT = Array.from({ length: 120 }, (_, i) => `行${i}：今日无新通知`).join('\n')
+  const newT = `${oldT}\n【新通知】报名开始！`
+  const v = judgeImportance({ oldText: oldT, newText: newT, threshold: 0.3 })
+  assert.ok(v.ratio < 0.3)
+  assert.equal(v.addedLines, 1)
+  // one new line is below the default of 2 (a rotating banner also adds one);
+  // minAddedLines:1 is the "tell me about any single new line" mode
+  assert.equal(v.important, false)
+  assert.equal(judgeImportance({ oldText: oldT, newText: newT, threshold: 0.3, minAddedLines: 1 }).important, true)
+})
+
+test('urlFingerprint keeps hosts that slugOf collapses apart', () => {
+  const a = 'https://例子.中国/公告'
+  const b = 'https://另一个例子.中国/通知'
+  assert.equal(slugOf(a), slugOf(b))
+  assert.notEqual(urlFingerprint(a), urlFingerprint(b))
+})
+
+test('addedLines trims the old side too', () => {
+  // the lexmount provider returns indented text; an untrimmed old set made
+  // every line look new
+  assert.deepEqual(addedLines('  alpha\n  beta', 'alpha\nbeta'), [])
 })
 
 test('makeSnapshot stores fingerprint and timestamps', () => {
