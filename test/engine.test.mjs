@@ -31,6 +31,14 @@ test('htmlToText strips scripts, styles, nav/footer and tags; decodes entities',
   assert.ok(text.split('\n').some((l) => l.includes('条目一')))
 })
 
+test('htmlToText decodes double-encoded entities too', () => {
+  // publishers emit &amp;nbsp; and &amp;amp; — one pass leaves a literal "&nbsp;"
+  // in the snapshot, which then shows up as text in every diff
+  const text = htmlToText('<main><p>A&amp;nbsp;B &amp;amp; C &amp;lt;tag&amp;gt;</p></main>')
+  assert.ok(!/&nbsp;|&amp;|&lt;|&gt;/.test(text), `still encoded: ${text}`)
+  assert.ok(text.includes('A B & C <tag>'), text)
+})
+
 test('changeRatio: identical=0, disjoint=1, close≈small', () => {
   assert.equal(changeRatio('same text here', 'same text here'), 0)
   assert.equal(changeRatio('aaaa', 'bbbb'), 1)

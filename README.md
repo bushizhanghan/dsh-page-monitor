@@ -68,7 +68,7 @@ dsh plugin --profile desktop add @bushizhanghan/dsh-page-monitor
 ## 开发
 
 ```sh
-node --test                # 单测 + 集成（11 个）
+node --test                # 单测 + 集成（12 个）
 node test/integration.test.mjs   # 全链路（fake ctx）集成测试
 node scripts/live-smoke.mjs  # 真实网页冒烟（不在 test/ 里，不会被 node --test 当成测试；北邮官网会 412，见 provider 说明）
 ```
